@@ -1,0 +1,21 @@
+[package]
+name = "solar_company"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+debug = ["bevy/debug"]
+dev = ["bevy/dynamic_linking", "debug"]
+
+[dependencies]
+bevy = { version = "0.17.3", features = ["webgl2"] }
+bevy_panorbit_camera = { version = "0.33.1", features = ["bevy_egui"] }
+bevy_egui = "0.38.1"
+
+[profile.release]
+opt-level = 3
+panic = 'abort'
+debug = 0
+strip = true
+lto = "thin"
+codegen-units = 1
