@@ -1,6 +1,6 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 
-use crate::definitions::{Acceleration, Mass, ObjectMarker, Position, UniversalG, Vec3f64, Velocity};
+use crate::definitions::{Acceleration, Mass, ObjectMarker, PhysicsDT, Position, TimePaused, UniversalG, Vec3f64, Velocity};
 
 pub struct PhysicsPlugin;
 
@@ -8,6 +8,8 @@ impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Time::<Fixed>::from_seconds(1.));
         app.insert_resource(UniversalG::default());
+        app.insert_resource(PhysicsDT(0.15));
+        app.insert_resource(TimePaused(true));
         app.add_systems(FixedUpdate, simplectic_euler);
     }
 }
@@ -15,8 +17,12 @@ impl Plugin for PhysicsPlugin {
 fn simplectic_euler(
     mut bodies_q: Query<(&mut Position, &mut Velocity, &Mass, Entity), With<ObjectMarker>>,
     universal_g: Res<UniversalG>,
+    dt: Res<PhysicsDT>,
+    time_paused: Res<TimePaused>
 ) {
-    const DT: f64 = 0.05;
+    if time_paused.0 {
+        return;
+    }
     let bodies_copy: Vec<(&Position, &Velocity, &Mass, Entity)> = bodies_q.iter().collect();
     let mut accelerations: HashMap<Entity, Acceleration> = HashMap::new();
     for (position_outer, _, _, entity_outer) in bodies_copy.iter() {
@@ -43,8 +49,8 @@ fn simplectic_euler(
         position.1 = previous_position;
         velocity.1 = previous_velocity;
 
-        velocity.0 = previous_velocity + accelerations.get(&entity).expect("Entity should be present").0 * DT;
-        position.0 = previous_position + velocity.0 * DT;
+        velocity.0 = previous_velocity + accelerations.get(&entity).expect("Entity should be present").0 * dt.0;
+        position.0 = previous_position + velocity.0 * dt.0;
     }
 }
 

@@ -5,8 +5,7 @@ use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiCon
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 
 use crate::definitions::{
-    InterpolatingObjects, MainCameraTracker, Mass, ObjectMarker, Position, UiCameraTracker,
-    UniversalG, Velocity,
+    InterpolatingObjects, MainCameraTracker, Mass, ObjectMarker, PhysicsDT, Position, TimePaused, UiCameraTracker, UniversalG, Velocity
 };
 
 pub struct ViewPlugin;
@@ -19,6 +18,7 @@ impl Plugin for ViewPlugin {
         app.add_systems(Startup, setup);
         app.add_systems(Update, (interpolate_objects, draw_velocity_gizmos).chain());
         app.add_systems(EguiPrimaryContextPass, simulation_ui);
+        app.add_systems(Update, drag_bodies);
     }
 }
 
@@ -53,11 +53,12 @@ fn interpolate_objects(
     interpolating_objects: Res<InterpolatingObjects>,
     mut motion_q: Query<(&mut Transform, &Position), With<ObjectMarker>>,
     fixed_time: Res<Time<Fixed>>,
+    time_paused: Res<TimePaused>
 ) {
     let alpha = fixed_time.overstep_fraction();
 
     for (mut transform, pos) in &mut motion_q {
-        if !interpolating_objects.0 {
+        if !interpolating_objects.0 || time_paused.0 {
             transform.translation = pos.0.into();
             continue;
         }
@@ -72,14 +73,16 @@ fn draw_velocity_gizmos(
     interpolating_objects: Res<InterpolatingObjects>,
     mut gizmos: Gizmos,
     motion_q: Query<(&Transform, &Velocity), With<ObjectMarker>>,
+    mut dt: ResMut<PhysicsDT>,
     fixed_time: Res<Time<Fixed>>,
+    time_paused: Res<TimePaused>
 ) {
     let alpha = fixed_time.overstep_fraction();
     for (transform, velocity) in motion_q.iter() {
         let pos = transform.translation;
         let old_vel_vec3: Vec3 = velocity.1.into();
         let new_vel_vec3: Vec3 = velocity.0.into();
-        if !interpolating_objects.0 {
+        if !interpolating_objects.0 || time_paused.0 {
             gizmos.arrow(pos, pos + new_vel_vec3, ORANGE_RED);
             continue;
         }
@@ -103,7 +106,9 @@ fn simulation_ui(
     mut wanted_timer_time: Local<f64>,
     mut name_buf: Local<HashMap<Entity, String>>,
     mut mass_buf: Local<HashMap<Entity, f64>>,
+    mut dt: ResMut<PhysicsDT>,
     mut interpolating_objects: ResMut<InterpolatingObjects>,
+    mut time_paused: ResMut<TimePaused>
 ) -> Result {
     let bodies_copy: Vec<(&Transform, &Position, &Velocity, &Mass, &Name, Entity)> =
         bodies_q.iter().collect();
@@ -140,6 +145,7 @@ fn simulation_ui(
                     }
                 }
 
+                ui.add(egui::DragValue::new(&mut dt.0));
                 ui.checkbox(&mut interpolating_objects.0, "Interpolate objects");
                 
                 ui.separator();
@@ -148,7 +154,8 @@ fn simulation_ui(
                 let response = ui.add(
                     egui::DragValue::new(&mut *wanted_timer_time)
                     .speed(0.01)
-                    .range(0.01..=f64::INFINITY)
+                    // TODO Re-change back to 0.01 later, and add proper time step tweaking
+                    .range(0.03..=f64::INFINITY)
                     .prefix("Physics execution frequency (in seconds): "),
                 );
                 let wanted_time_duration = Duration::from_millis((*wanted_timer_time * 1e3) as u64);
@@ -172,6 +179,8 @@ fn simulation_ui(
                     if response.clicked() {
                         *universal_g = UniversalG::default();
                     }
+
+                    ui.checkbox(&mut time_paused.0, "Time paused");
                 });
             });
             /*
@@ -191,4 +200,12 @@ fn simulation_ui(
                 
                 */
                 Ok(())
+}
+
+fn drag_bodies(time_paused: Res<TimePaused>) {
+    if !time_paused.0 {
+        return;
+    }
+
+
 }

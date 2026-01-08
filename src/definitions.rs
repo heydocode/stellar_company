@@ -159,3 +159,10 @@ pub struct ObjectDefinition {
     vel: Velocity,
     mass: Mass,
 }
+
+/// The number that is used as DT at each position & velocity calculation
+#[derive(Resource)]
+pub struct PhysicsDT(pub f64);
+
+#[derive(Resource)]
+pub struct TimePaused(pub bool);

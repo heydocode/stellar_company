@@ -1,8 +1,7 @@
 use bevy::{
-    color::palettes::css::{BLUE, RED, WHITE},
+    color::palettes::css::{BLUE, RED},
     prelude::*,
 };
-
 use crate::definitions::{Mass, ObjectMarker, Position, Vec3f64, Velocity};
 
 pub struct ObjectsPlugin;
@@ -18,36 +17,25 @@ fn spawn_bodies(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-commands.spawn((
-    Mesh3d(meshes.add(Sphere::new(60.))),
-    MeshMaterial3d(materials.add(Color::from(RED))),
-    Transform::from_xyz(-500., 0., 0.),
-    Position(Vec3f64::new(-500., 0., 0.), Vec3f64::ZERO),
-    Mass(1e23),
-    Velocity(Vec3f64::new(0., 0., 15.), Vec3f64::ZERO),
-    Name::new("Red sphere"),
-    ObjectMarker
-));
+    commands.spawn((
+        Mesh3d(meshes.add(Sphere::new(10.))),
+        MeshMaterial3d(materials.add(Color::from(RED))),
+        Transform::from_xyz(-100., 0., 0.),
+        Position(Vec3f64::new(-100., 0., 0.), Vec3f64::ZERO),
+        Mass(2.5e15),
+        Velocity(Vec3f64::new(10., 10., -2.), Vec3f64::ZERO),
+        Name::new("Red sphere"),
+        ObjectMarker,
+    ));
 
-commands.spawn((
-    Mesh3d(meshes.add(Sphere::new(60.))),
-    MeshMaterial3d(materials.add(Color::from(BLUE))),
-    Transform::from_xyz(500., 0., 0.),
-    Position(Vec3f64::new(500., 0., 0.), Vec3f64::ZERO),
-    Mass(1e23),
-    Velocity(Vec3f64::new(0., 0., -15.), Vec3f64::ZERO),
-    Name::new("Blue sphere"),
-    ObjectMarker
-));
-
-commands.spawn((
-    Mesh3d(meshes.add(Sphere::new(40.))),
-    MeshMaterial3d(materials.add(Color::from(WHITE))),
-    Transform::from_xyz(0., 250., 0.),
-    Position(Vec3f64::new(0., 250., 0.), Vec3f64::ZERO),
-    Mass(1e21),
-    Velocity(Vec3f64::new(15., 0., 0.), Vec3f64::ZERO),
-    Name::new("White sphere"),
-    ObjectMarker
-));
+    commands.spawn((
+        Mesh3d(meshes.add(Sphere::new(10.))),
+        MeshMaterial3d(materials.add(Color::from(BLUE))),
+        Transform::from_xyz(100., 0., 0.),
+        Position(Vec3f64::new(100., 0., 0.), Vec3f64::ZERO),
+        Mass(2.5e15),
+        Velocity(Vec3f64::new(-10., -10., 2.), Vec3f64::ZERO),
+        Name::new("Blue sphere"),
+        ObjectMarker,
+    ));
 }
