@@ -1,0 +1,1 @@
+/home/user/Desktop/rust/solar_company/target/wasm32-unknown-unknown/web-release/libsolar_company.rlib: /home/user/Desktop/rust/solar_company/src/definitions.rs /home/user/Desktop/rust/solar_company/src/lib.rs /home/user/Desktop/rust/solar_company/src/objects.rs /home/user/Desktop/rust/solar_company/src/physics.rs /home/user/Desktop/rust/solar_company/src/view.rs
