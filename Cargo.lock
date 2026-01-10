@@ -2454,6 +2454,7 @@ name = "fetch_space_bodies"
 version = "0.1.0"
 dependencies = [
  "reqwest",
+ "serde_json",
  "shared",
 ]
 
@@ -4570,6 +4571,8 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
+ "serde",
+ "serde_json",
  "sync_wrapper",
  "tokio",
  "tokio-rustls",

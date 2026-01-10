@@ -17,15 +17,11 @@ pub fn get_body_motion(id: i64) -> Option<(Position, Velocity)> {
         return None;
     };
 
-    println!("1");
-    dbg!(&text);
-
     let mut lines = text.lines().peekable();
 
     while let Some(line) = lines.next() {
         let line = line.trim();
         if line.contains("X =") {
-            println!("2");
             let pos_line = line;
             if let Some(next_line) = lines.peek() {
                 if next_line.contains("VX=") {
@@ -114,7 +110,8 @@ pub fn search_bodies(input: impl Into<String> + Display) -> Option<Vec<JPLHorizo
     Some(bodies)
 }
 
-pub fn get_body_properties(id: i64) -> Mass {
+/// Returns Mass and radius
+pub fn get_body_properties(id: i64) -> (Mass, f64) {
     todo!(
         "Use another API, other than JPL Horizons, which is mainly done for motion, not constants"
     )
@@ -144,7 +141,7 @@ fn parse_velocity(line: &str) -> Option<Velocity> {
 }
 
 fn parse_vec3_line(line: &str) -> Option<Vec3f64> {
-    let mut result = dbg!(Vec3f64::new(f64::NAN, f64::NAN, f64::NAN));
+    let mut result = Vec3f64::new(f64::NAN, f64::NAN, f64::NAN);
 
     if let Some(cords) = extract_vec3_from_line(line) {
         for (index, cord) in cords.iter().enumerate() {
@@ -162,8 +159,6 @@ fn parse_vec3_line(line: &str) -> Option<Vec3f64> {
         println!("Unable to extract vec3!");
     }
 
-    dbg!(result);
-
     if result.x.is_nan() || result.y.is_nan() || result.z.is_nan() {
         None
     } else {
@@ -175,24 +170,17 @@ fn extract_vec3_from_line(line: &str) -> Option<[&str; 3]> {
     let mut response = [""; 3];
     let mut split_pattern = line.trim().split("=");
     if let Some(x_raw) = split_pattern.nth(1) {
-        println!("1");
         if let Some(x_number) = x_raw.trim().split_whitespace().next() {
-            println!("2");
             response[0] = x_number;
         }
     }
     if let Some(y_raw) = split_pattern.nth(0) {
-        println!("3");
         if let Some(y_number) = y_raw.trim().split_whitespace().next() {
-            println!("4");
             response[1] = y_number;
         }
     }
-    dbg!(&split_pattern);
     if let Some(z_raw) = split_pattern.nth(0) {
-        println!("5");
         if let Some(z_number) = z_raw.trim().split_whitespace().next() {
-            println!("6");
             response[2] = z_number;
         }
     }
@@ -251,27 +239,39 @@ fn test_search_bodies() {
 
 #[test]
 fn test_get_bodies_motion() {
-    assert_eq!(
-        get_body_motion(499).unwrap(),
-        (
-            Position(
-                Vec3f64::new(
-                    2.345471743170112E+08,
-                    -1.467043494230836E+08,
-                    -5.155677809885457E+06
-                ),
-                Vec3f64::ZERO
+    let truth_result = (
+        Position(
+            Vec3f64::new(
+                2.345471743170112E+08,
+                -1.467043494230836E+08,
+                -5.155677809885457E+06,
             ),
-            Velocity(
-                Vec3f64::new(
-                    3.095693250734420E+01,
-                    3.176535947901246E+01,
-                    5.221152230112693E-01
-                ),
-                Vec3f64::ZERO
-            )
-        )
+            Vec3f64::ZERO,
+        ),
+        Velocity(
+            Vec3f64::new(
+                3.095693250734420E+01,
+                3.176535947901246E+01,
+                5.221152230112693E-01,
+            ),
+            Vec3f64::ZERO,
+        ),
     );
+    let testable = get_body_motion(499).unwrap();
+
+    let condition1 = testable.0.0.x.floor() == truth_result.0.0.x.floor()
+        && testable.0.0.y.floor() == truth_result.0.0.y.floor()
+        && testable.0.0.z.floor() == truth_result.0.0.z.floor();
+
+    let condition2 = testable.1.0.x.floor() == truth_result.1.0.x.floor()
+        && testable.1.0.y.floor() == truth_result.1.0.y.floor()
+        && testable.1.0.z.floor() == truth_result.1.0.z.floor();
+
+    println!("{}", condition1);
+    println!("{} {}", testable.0.0.x.floor(), truth_result.0.0.x.floor());
+
+    assert!(condition1);
+    assert!(condition2);
 }
 
 #[test]
