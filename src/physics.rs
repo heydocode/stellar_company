@@ -1,6 +1,6 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 
-use crate::definitions::{Acceleration, Mass, ObjectMarker, PhysicsDT, Position, TimePaused, UniversalG, Vec3f64, Velocity};
+use shared::prelude::{Acceleration, Mass, ObjectMarker, PhysicsDT, Position, TimePaused, UniversalG, Vec3f64, Velocity};
 
 pub struct PhysicsPlugin;
 

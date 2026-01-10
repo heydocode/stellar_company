@@ -4,7 +4,7 @@ use bevy::{color::palettes::css::ORANGE_RED, math::VectorSpace, platform::collec
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext, egui};
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 
-use crate::definitions::{
+use shared::prelude::{
     InterpolatingObjects, MainCameraTracker, Mass, ObjectMarker, PhysicsDT, Position, TimePaused, UiCameraTracker, UniversalG, Velocity
 };
 

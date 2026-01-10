@@ -1,15 +1,11 @@
-use bevy::prelude::*;
 use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vec3f64 {
     pub x: f64,
     pub y: f64,
     pub z: f64,
 }
-
-#[derive(Resource)]
-pub struct InterpolatingObjects(pub bool);
 
 impl Vec3f64 {
     pub const ZERO: Self = Vec3f64 {
@@ -98,49 +94,37 @@ impl AddAssign for Vec3f64 {
     }
 }
 
-impl Into<Vec3> for Vec3f64 {
-    fn into(self) -> Vec3 {
-        Vec3 {
-            x: self.x as f32,
-            y: self.y as f32,
-            z: self.z as f32,
-        }
-    }
+#[derive(Default, Debug, PartialEq)]
+pub struct JPLHorizonsBodySearch {
+    pub id: i64,
+    pub name: String,
+    pub designation: String,
+    pub other: String
 }
 
-#[derive(Component)]
-pub struct UiCameraTracker;
-
-#[derive(Component)]
-pub struct MainCameraTracker;
-
-#[derive(Resource, Debug)]
-pub struct UniversalG(pub f64);
-
-impl Default for UniversalG {
-    fn default() -> Self {
-        Self(6.6743e-11)
-    }
+pub struct ObjectDefinition {
+    pub pos: Position,
+    pub vel: Velocity,
+    pub mass: Mass,
 }
 
 /// Mass in kg
-#[derive(Component, Debug)]
+#[derive(Debug)]
 pub struct Mass(pub f64);
 
 /// Stores 2 Positions:
 /// - actual Position (index: 0)
 /// - last Position (index: 1) (used for interpolation)
-#[derive(Component, Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Position(pub Vec3f64, pub Vec3f64);
 
 /// Wrapper of Vec3 representing m/s*s velocity
-/// Stores 2 Velocitues:
+/// Stores 2 Velocities:
 /// - actual Velocity (index: 0)
 /// - last Velocity (index: 1) (used for interpolation)
-#[derive(Component, Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Velocity(pub Vec3f64, pub Vec3f64);
 
-#[derive(Component)]
 pub struct Acceleration(pub Vec3f64);
 
 impl Neg for Acceleration {
@@ -150,19 +134,3 @@ impl Neg for Acceleration {
         Self(-self.0)
     }
 }
-
-#[derive(Component)]
-pub struct ObjectMarker;
-
-pub struct ObjectDefinition {
-    pos: Position,
-    vel: Velocity,
-    mass: Mass,
-}
-
-/// The number that is used as DT at each position & velocity calculation
-#[derive(Resource)]
-pub struct PhysicsDT(pub f64);
-
-#[derive(Resource)]
-pub struct TimePaused(pub bool);

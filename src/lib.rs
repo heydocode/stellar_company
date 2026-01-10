@@ -2,7 +2,6 @@ use bevy::prelude::*;
 
 use crate::{objects::ObjectsPlugin, physics::PhysicsPlugin, view::ViewPlugin};
 
-mod definitions;
 mod objects;
 mod physics;
 mod view;

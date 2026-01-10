@@ -2,7 +2,7 @@ use bevy::{
     color::palettes::css::{BLUE, RED},
     prelude::*,
 };
-use crate::definitions::{Mass, ObjectMarker, Position, Vec3f64, Velocity};
+use shared::prelude::{Mass, ObjectMarker, Position, Vec3f64, Velocity};
 
 pub struct ObjectsPlugin;
 
