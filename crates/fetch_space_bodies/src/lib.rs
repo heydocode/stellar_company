@@ -112,9 +112,7 @@ pub fn search_bodies(input: impl Into<String> + Display) -> Option<Vec<JPLHorizo
 
 /// Returns Mass and radius
 pub fn get_body_properties(id: i64) -> (Mass, f64) {
-    todo!(
-        "Use another API, other than JPL Horizons, which is mainly done for motion, not constants"
-    )
+    todo!("Using JPL Horizons, retrieve Mass and mean radius")
 }
 fn parse_position(line: &str) -> Option<Position> {
     let pos: Position;
