@@ -17,31 +17,32 @@ pub fn get_body_motion(id: i64) -> Option<(Position, Velocity)> {
         return None;
     };
 
-    let mut lines = text.lines().peekable();
+    let mut lines = text.lines();
 
     while let Some(line) = lines.next() {
         let line = line.trim();
-        todo!("Switch to EOX/EOF like messages JPL Horizons prints before printing motion/other data");
-        if line.contains("X =") {
-            let pos_line = line;
-            if let Some(next_line) = lines.peek() {
-                if next_line.contains("VX=") {
-                    let vel_line = next_line;
-                    if let Some(pos) = parse_position(pos_line) {
-                        if let Some(vel) = parse_velocity(vel_line) {
-                            return Some((pos, vel));
-                        } else {
-                            break;
+        if line.starts_with("$$EOE") {
+            break;
+        }
+        if line.starts_with("$$SOE") {
+            // Skip useless line
+            lines.next();
+            if let Some(should_be_x_line) = lines.next() {
+                if should_be_x_line.contains(" X") {
+                    let pos_line = should_be_x_line;
+                    if let Some(next_line) = lines.next() {
+                        if next_line.contains("VX") {
+                            let vel_line = next_line;
+                            if let Some(pos) = parse_position(pos_line) {
+                                if let Some(vel) = parse_velocity(vel_line) {
+                                    return Some((pos, vel));
+                                }
+                            }
                         }
-                    } else {
-                        break;
                     }
-                } else {
-                    break;
                 }
-            } else {
-                break;
             }
+            break;
         }
     }
 
@@ -224,6 +225,9 @@ fn test_extractors() {
 }
 
 /// Will always fail if `test_extractors` fails
+/// Note about floors:
+/// these are needed for not breaking the test because of float comparation,
+/// or by slightly modified JPL Horizons data (in the 10e-6 magnitude order).
 #[test]
 fn test_get_bodies_motion() {
     let truth_result = (
@@ -254,6 +258,7 @@ fn test_get_bodies_motion() {
         && testable.1.0.y.floor() == truth_result.1.0.y.floor()
         && testable.1.0.z.floor() == truth_result.1.0.z.floor();
 
+    // It will be only visible if the test fails.
     println!("{}", condition1);
     println!("{} {}", testable.0.0.x.floor(), truth_result.0.0.x.floor());
 
