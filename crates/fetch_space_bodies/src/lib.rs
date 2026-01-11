@@ -21,6 +21,7 @@ pub fn get_body_motion(id: i64) -> Option<(Position, Velocity)> {
 
     while let Some(line) = lines.next() {
         let line = line.trim();
+        todo!("Switch to EOX/EOF like messages JPL Horizons prints before printing motion/other data");
         if line.contains("X =") {
             let pos_line = line;
             if let Some(next_line) = lines.peek() {
@@ -190,26 +191,6 @@ fn extract_vec3_from_line(line: &str) -> Option<[&str; 3]> {
     Some(response)
 }
 
-fn extract_n_value(text: &str) -> Option<f64> {
-    let n: f64;
-    if text.contains('=') {
-        let s = text.trim();
-        let after_eq = s.split_once('=')?.1.trim();
-        if let Ok(val) = after_eq.parse::<f64>() {
-            n = val
-        } else {
-            return None;
-        }
-    } else {
-        if let Ok(val) = text.parse::<f64>() {
-            n = val;
-        } else {
-            return None;
-        }
-    }
-    Some(n)
-}
-
 #[test]
 fn test_search_bodies() {
     let suggested_bodies = search_bodies("Mars").unwrap();
@@ -235,6 +216,14 @@ fn test_search_bodies() {
     }));
 }
 
+#[test]
+fn test_extractors() {
+    let extracted = extract_vec3_from_line("                   VX= 3.095693250734420E+01 VY= 3.176535947901246E+01 VZ= 5.221152230112693E-01     ").unwrap();
+    let expected: [&str; 3] = ["3.095693250734420E+01", "3.176535947901246E+01", "5.221152230112693E-01"];
+    assert_eq!(extracted, expected);
+}
+
+/// Will always fail if `test_extractors` fails
 #[test]
 fn test_get_bodies_motion() {
     let truth_result = (
@@ -272,34 +261,6 @@ fn test_get_bodies_motion() {
     assert!(condition2);
 }
 
-#[test]
-fn test_extractors() {
-    let x_text = " X = 2.345471743170112E+08 ";
-    let y_text = " Y =-1.467043494230836E+08 ";
-    let z_text = "  Z =-5.155677809885457E+06      ";
-
-    let x = extract_n_value(x_text).unwrap();
-    let y = extract_n_value(y_text).unwrap();
-    let z = extract_n_value(z_text).unwrap();
-
-    assert_eq!(x, 2.345471743170112E+08f64);
-    assert_eq!(y, -1.467043494230836E+08f64);
-    assert_eq!(z, -5.155677809885457E+06f64);
-
-    let vel_x_text = " VX= 3.095693250734420E+01   ";
-    let vel_y_text = " VY= 3.176535947901246E+01 ";
-    let vel_z_text = " VZ= 5.221152230112693E-01         ";
-
-    let vel_x = extract_n_value(vel_x_text).unwrap();
-    let vel_y = extract_n_value(vel_y_text).unwrap();
-    let vel_z = extract_n_value(vel_z_text).unwrap();
-
-    assert_eq!(vel_x, 3.095693250734420E+01f64);
-    assert_eq!(vel_y, 3.176535947901246E+01f64);
-    assert_eq!(vel_z, 5.221152230112693E-01f64);
-}
-
-/// NOTE: This test will always fail if extractors fail
 #[test]
 fn test_parsers() {
     let pos_text = " X = 2.345471743170112E+08 Y =-1.467043494230836E+08 Z =-5.155677809885457E+06";
