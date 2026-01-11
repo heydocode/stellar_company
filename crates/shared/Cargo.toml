@@ -9,3 +9,4 @@ bevy = ["dep:bevy"]
 
 [dependencies]
 bevy = { version = "0.17.3", default-features = false, optional = true }
+reqwest = "*"

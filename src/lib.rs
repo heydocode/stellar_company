@@ -10,10 +10,6 @@ pub struct SolarCompanyGameLib;
 
 impl Plugin for SolarCompanyGameLib {
     fn build(&self, app: &mut App) {
-        app.add_plugins((
-            ViewPlugin,
-            ObjectsPlugin,
-            PhysicsPlugin,
-        ));
+        app.add_plugins((ViewPlugin, ObjectsPlugin, PhysicsPlugin));
     }
 }

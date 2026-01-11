@@ -81,7 +81,7 @@ impl Neg for Vec3f64 {
         Self {
             x: -self.x,
             y: -self.y,
-            z: -self.z
+            z: -self.z,
         }
     }
 }
@@ -101,7 +101,7 @@ pub struct JPLHorizonsBodySearch {
     pub id: i64,
     pub name: String,
     pub designation: String,
-    pub other: String
+    pub other: String,
 }
 
 pub struct ObjectDefinition {

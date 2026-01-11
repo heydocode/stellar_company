@@ -1,7 +1,11 @@
 //! BEVY-DEPENDENT DEFINITIONS
 
-use bevy::{ecs::component::{Mutable, StorageType}, prelude::*};
 use crate::standalone::{Acceleration, Mass, Position, Vec3f64, Velocity};
+use bevy::{
+    ecs::component::{Mutable, StorageType},
+    prelude::*,
+};
+use reqwest::Client;
 
 #[derive(Component)]
 pub struct UiCameraTracker;
@@ -64,3 +68,19 @@ impl Component for Acceleration {
 
     type Mutability = Mutable;
 }
+
+#[derive(Resource, Deref, DerefMut)]
+pub struct ClientRes(pub Client);
+
+impl ClientRes {
+    pub fn insert_res(app: &mut App) {
+        let client = Client::builder().user_agent("curl/7.79.1").build().unwrap();
+        app.insert_resource(Self(client));
+    }
+}
+
+#[derive(Resource)]
+pub struct SelectedFocusEntity(pub Option<Entity>);
+
+#[derive(Component)]
+pub struct Radius(pub f64);

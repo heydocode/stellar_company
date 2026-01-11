@@ -1,11 +1,21 @@
 use std::time::Duration;
 
-use bevy::{color::palettes::css::ORANGE_RED, math::VectorSpace, platform::collections::HashMap, prelude::*};
+use bevy::{
+    color::palettes::css::{GREEN, ORANGE_RED},
+    math::VectorSpace,
+    platform::collections::HashMap,
+    prelude::*,
+    tasks::block_on,
+};
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext, egui};
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 
-use shared::prelude::{
-    InterpolatingObjects, MainCameraTracker, Mass, ObjectMarker, PhysicsDT, Position, TimePaused, UiCameraTracker, UniversalG, Velocity
+use fetch_space_bodies::{get_body_motion, get_body_properties, search_bodies};
+use shared::{
+    bevy::{ClientRes, Radius},
+    prelude::{
+        InterpolatingObjects, JPLHorizonsBodySearch, MainCameraTracker, Mass, ObjectMarker, PhysicsDT, Position, SelectedFocusEntity, TimePaused, UiCameraTracker, UniversalG, Vec3f64, Velocity
+    },
 };
 
 pub struct ViewPlugin;
@@ -15,16 +25,30 @@ impl Plugin for ViewPlugin {
         app.add_plugins((PanOrbitCameraPlugin, EguiPlugin::default()));
         app.insert_resource(AmbientLight::default());
         app.insert_resource(InterpolatingObjects(true));
+        app.insert_resource(SelectedFocusEntity(None));
+        ClientRes::insert_res(app);
         app.add_systems(Startup, setup);
-        app.add_systems(Update, (interpolate_objects, draw_velocity_gizmos).chain());
-        app.add_systems(EguiPrimaryContextPass, simulation_ui);
+        app.add_systems(Update, (interpolate_objects, draw_velocity_gizmos, update_camera));
+        app.add_systems(
+            EguiPrimaryContextPass,
+            (simulation_ui, new_bodies_ui, camera_focus_ui),
+        );
         app.add_systems(Update, drag_bodies);
     }
 }
 
 fn setup(mut commands: Commands) {
     commands.spawn((
-        PanOrbitCamera::default(),
+        PanOrbitCamera {
+            // Panning the camera changes the focus, and so you most likely want to disable
+            // panning when setting the focus manually
+            pan_sensitivity: 0.0,
+            // If you want to fully control the camera's focus, set smoothness to 0 so it
+            // immediately snaps to that location. If you want the 'follow' to be smoothed,
+            // leave this at default or set it to something between 0 and 1.
+            pan_smoothness: 0.1,
+            ..default()
+        },
         Camera {
             order: 2,
             is_active: true,
@@ -53,7 +77,7 @@ fn interpolate_objects(
     interpolating_objects: Res<InterpolatingObjects>,
     mut motion_q: Query<(&mut Transform, &Position), With<ObjectMarker>>,
     fixed_time: Res<Time<Fixed>>,
-    time_paused: Res<TimePaused>
+    time_paused: Res<TimePaused>,
 ) {
     let alpha = fixed_time.overstep_fraction();
 
@@ -72,22 +96,175 @@ fn interpolate_objects(
 fn draw_velocity_gizmos(
     interpolating_objects: Res<InterpolatingObjects>,
     mut gizmos: Gizmos,
-    motion_q: Query<(&Transform, &Velocity), With<ObjectMarker>>,
+    motion_q: Query<(&Transform, &Velocity, &Radius), With<ObjectMarker>>, // ← added Radius
     mut dt: ResMut<PhysicsDT>,
     fixed_time: Res<Time<Fixed>>,
-    time_paused: Res<TimePaused>
+    time_paused: Res<TimePaused>,
 ) {
     let alpha = fixed_time.overstep_fraction();
-    for (transform, velocity) in motion_q.iter() {
-        let pos = transform.translation;
-        let old_vel_vec3: Vec3 = velocity.1.into();
-        let new_vel_vec3: Vec3 = velocity.0.into();
-        if !interpolating_objects.0 || time_paused.0 {
-            gizmos.arrow(pos, pos + new_vel_vec3, ORANGE_RED);
+
+    for (transform, velocity, radius) in motion_q.iter() {
+        let center = transform.translation;
+        let radius = radius.0;
+
+        let vel_vec3 = if !interpolating_objects.0 || time_paused.0 {
+            velocity.0.into()
+        } else {
+            let old_vel: Vec3 = velocity.1.into();
+            let new_vel: Vec3 = velocity.0.into();
+            old_vel.lerp(new_vel, alpha)
+        };
+
+        if vel_vec3.length_squared() < 0.0001 {
             continue;
         }
-        let interpolated_vel = old_vel_vec3.lerp(new_vel_vec3, alpha);
-        gizmos.arrow(pos, pos + interpolated_vel, ORANGE_RED);
+
+        let direction = vel_vec3.normalize();
+        let start = center + direction * radius as f32;
+
+        let end = start + vel_vec3;
+
+        gizmos.arrow(start, end, ORANGE_RED);
+    }
+}
+
+fn new_bodies_ui(
+    mut contexts: EguiContexts<'_, '_>,
+    client: Res<'_, ClientRes>,
+    mut commands: Commands<'_, '_>,
+    mut meshes: ResMut<'_, Assets<Mesh>>,
+    mut materials: ResMut<'_, Assets<StandardMaterial>>,
+    mut body_name: Local<'_, String>,
+    mut searched_bodies: Local<'_, Vec<(i64, String)>>,
+    mut spawn_body: Local<'_, Option<i64>>,
+    mut id_error: Local<'_, Option<String>>,
+) -> Result {
+    let mut search_bodies_v = false;
+    egui::Window::new("Add a body")
+    .scroll(true)
+    .show(contexts.ctx_mut()?, |ui: &mut egui::Ui| {
+        ui.label("Note that you really should have time paused before spawning any body, as its parameters are as of J2000.0, the instant the simulation starts. Doing the contrary won't crash the app or something bad, it will just produce unconsistent/anomaly results");
+        ui.separator();
+        ui.label("Please search the ID of the body you want to import by entering its name. Once you have its ID, put it instead of the name and you'll be able to import it right into the simulation!");
+        ui.separator();
+        ui.label("You can then see the spawned from retrieved physical properties body by going to the \"Camera focus\" window >> Select Body >> Your Body. Note that \"Your Body\" is the body ID you entered to spawn the body.");
+        ui.separator();
+        ui.label("When spawning a body, there's a huge lag, that's normal: the simulation waits until the NASA databases finish responding, and that will be fixed very soon.");
+        let response = ui.text_edit_singleline(&mut *body_name);
+        if response.changed() {
+            if !body_name.chars().all(|c| c.is_ascii_digit()) {
+                search_bodies_v = true;
+                *id_error = None;
+            }
+        }
+        let enabled: bool;
+        if body_name.chars().all(|c| c.is_ascii_digit()) {
+            searched_bodies.clear();
+            enabled = true;
+        }
+        else {
+            enabled = false;
+        }
+        if ui.add_enabled(enabled, egui::Button::new("Spawn body")).clicked() {
+            *spawn_body = body_name.parse::<i64>().ok();
+        };
+        if let Some(error) = &*id_error {
+            ui.label(format!("{}", error));
+        }
+
+        for (index, (id, name)) in searched_bodies.iter().enumerate() {
+            ui.label(format!("Body {}: ID: {}; NAME: \"{}\"", index + 1, id, name));
+        }
+    });
+
+    if search_bodies_v {
+        if let Some(bodies_list) = search_bodies(client.0.clone(), body_name.as_str()) {
+            searched_bodies.clear();
+            for body in bodies_list {
+                searched_bodies.push((body.id, body.name));
+            }
+        }
+    }
+    if let Some(id) = *spawn_body {
+        if let Some((position, velocity)) = get_body_motion(client.0.clone(), id) {
+            if let Some((mass, radius)) = get_body_properties(client.0.clone(), id) {
+                commands.spawn((
+                    Mesh3d(meshes.add(Sphere::new(radius as f32))),
+                    MeshMaterial3d(materials.add(Color::from(GREEN))),
+                    Transform::from_xyz(
+                        position.0.x as f32,
+                        position.0.y as f32,
+                        position.0.z as f32,
+                    ),
+                    position,
+                    mass,
+                    velocity,
+                    Radius(radius),
+                    Name::new(format!("Spawned body, id: \"{}\"", id)),
+                    ObjectMarker,
+                ));
+            } else {
+                *id_error = Some(format!(
+                    "Unable to find body {} physic properties (mass & radius)\nPlease search another Body, if possible, a major one (e.g. Earth, Mars, Sun)",
+                    id
+                ));
+                error!(
+                    "Unable to find body {} physic properties (mass & radius)\nPlease search another Body, if possible, a major one (e.g. Earth, Mars, Sun)",
+                    id
+                );
+            }
+        } else {
+            *id_error = Some(format!(
+                "Unable to find body {} motion parameters (position & velocity)",
+                id
+            ));
+            error!(
+                "Unable to find body {} motion parameters (position & velocity)",
+                id
+            );
+        }
+        *spawn_body = None;
+    }
+
+    Ok(())
+}
+
+fn camera_focus_ui(
+    mut contexts: EguiContexts,
+    bodies_q: Query<(&Transform, &Name, Entity)>,
+    mut selected_res: ResMut<SelectedFocusEntity>
+) -> Result {
+    egui::Window::new("Camera focus").scroll(true).show(
+        contexts.ctx_mut()?,
+        |ui: &mut egui::Ui| {
+            let selected = &mut selected_res.0;
+            let before = selected.clone();
+            egui::ComboBox::from_label("Select a body by name")
+                .selected_text(format!("{:?}", selected))
+                .show_ui(ui, |ui| {
+                    for (_, name, entity) in bodies_q.iter() {
+                        ui.selectable_value(&mut *selected, Some(entity), format!("{}", name));
+                    }
+                });
+        },
+    );
+    Ok(())
+}
+
+fn update_camera(mut selected: ResMut<SelectedFocusEntity>, bodies_q: Query<(&Transform, &Name, Entity)>,
+mut pan_orbit_q: Query<&mut PanOrbitCamera>,) {
+    if let Some(entity) = selected.0 {
+        if let Ok(mut pan_orbit) = pan_orbit_q.single_mut() {
+            for (transform, _, body_entity) in bodies_q.iter() {
+                if entity == body_entity {
+                    pan_orbit.target_focus = transform.translation;
+                    // Whenever changing properties manually like this, it's necessary to force
+                    // PanOrbitCamera to update this frame (by default it only updates when there are
+                    // input events).
+                    pan_orbit.force_update = true;
+                }
+            }
+        }
     }
 }
 
@@ -108,7 +285,8 @@ fn simulation_ui(
     mut mass_buf: Local<HashMap<Entity, f64>>,
     mut dt: ResMut<PhysicsDT>,
     mut interpolating_objects: ResMut<InterpolatingObjects>,
-    mut time_paused: ResMut<TimePaused>
+    mut time_paused: ResMut<TimePaused>,
+    mut selected: Local<String>,
 ) -> Result {
     let bodies_copy: Vec<(&Transform, &Position, &Velocity, &Mass, &Name, Entity)> =
         bodies_q.iter().collect();
@@ -117,7 +295,7 @@ fn simulation_ui(
         .show(contexts.ctx_mut()?, |ui: &mut egui::Ui| {
             ui.label("Please choose a section to work with");
             egui::CollapsingHeader::new("TWEAKING PARAMETERS").show(ui, |ui: &mut egui::Ui| {
-                ui.label("Note: Position and Velocity can be easily changed by dragging the bodies with the mouse cursor or with fingers");
+                ui.label("Note: Position and Velocity can be easily changed by dragging the bodies with the mouse cursor or with fingers <NOT IMPLEMENTED YET>");
                 for (mut transform, mut position, mut velocity, mut mass, mut name, mut entity) in
                     bodies_q.iter_mut()
                 {
@@ -147,10 +325,10 @@ fn simulation_ui(
 
                 ui.add(egui::DragValue::new(&mut dt.0));
                 ui.checkbox(&mut interpolating_objects.0, "Interpolate objects");
-                
+
                 ui.separator();
                 ui.add(egui::Label::new("TIME & CONSTANTS"));
-                
+
                 let response = ui.add(
                     egui::DragValue::new(&mut *wanted_timer_time)
                     .speed(0.01)
@@ -175,7 +353,7 @@ fn simulation_ui(
                         .prefix("G: "),
                     );
                     let response = ui.add(egui::Button::new("Reset the Universal G value to default"));
-                    
+
                     if response.clicked() {
                         *universal_g = UniversalG::default();
                     }
@@ -183,29 +361,27 @@ fn simulation_ui(
                     ui.checkbox(&mut time_paused.0, "Time paused");
                 });
             });
-            /*
-            
-            ui.label(format!(
-                "Position: \nx: {}\ny: {}\nz: {}",
-                position.0.x, position.0.y, position.0.z
-            ));
-            ui.label(format!(
-                "Velocity: \nx: {}\ny: {}\nz: {}",
-                velocity.0.x, velocity.0.y, velocity.0.z
-            ));
-            ui.label(format!(
-                "Actual Interpolated Position: {:#?}",
-                transform.translation
-                ));
-                
-                */
-                Ok(())
+    /*
+
+    ui.label(format!(
+        "Position: \nx: {}\ny: {}\nz: {}",
+        position.0.x, position.0.y, position.0.z
+    ));
+    ui.label(format!(
+        "Velocity: \nx: {}\ny: {}\nz: {}",
+        velocity.0.x, velocity.0.y, velocity.0.z
+    ));
+    ui.label(format!(
+        "Actual Interpolated Position: {:#?}",
+        transform.translation
+        ));
+
+        */
+    Ok(())
 }
 
 fn drag_bodies(time_paused: Res<TimePaused>) {
     if !time_paused.0 {
         return;
     }
-
-
 }
