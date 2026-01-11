@@ -94,6 +94,8 @@ impl AddAssign for Vec3f64 {
     }
 }
 
+/// I really don't think these four information must be regrouped in a struct,
+/// but we'll see later. TODO
 #[derive(Default, Debug, PartialEq)]
 pub struct JPLHorizonsBodySearch {
     pub id: i64,

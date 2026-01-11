@@ -1,1 +1,1 @@
-curl "https://ssd.jpl.nasa.gov/api/horizons.api?format=text&COMMAND='Mars'MAKE_EPHEM='NO'"
+curl "https://ssd.jpl.nasa.gov/api/horizons.api?format=text&COMMAND=%27499%27&MAKE_EPHEM=%27NO%27&OBJ_DATA='YES'"
