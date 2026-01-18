@@ -2,7 +2,10 @@ use bevy::{
     color::palettes::css::{BLUE, RED},
     prelude::*,
 };
-use shared::{bevy::Radius, prelude::{Mass, ObjectMarker, Position, Vec3f64, Velocity}};
+use shared::{
+    bevy::Radius,
+    prelude::{Mass, ObjectMarker, Position, Vec3f64, Velocity},
+};
 
 pub struct ObjectsPlugin;
 

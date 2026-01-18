@@ -1,10 +1,12 @@
 //! BEVY-DEPENDENT DEFINITIONS
 
-use crate::standalone::{Acceleration, Mass, Position, Vec3f64, Velocity};
+use crate::{prelude::JPLHorizonsBodySearch, standalone::{Acceleration, Mass, Position, Vec3f64, Velocity}};
 use bevy::{
     ecs::component::{Mutable, StorageType},
     prelude::*,
+    render::extract_resource::ExtractResource,
 };
+use bevy::{ecs::world::CommandQueue, tasks::Task};
 use reqwest::Client;
 
 #[derive(Component)]
@@ -69,7 +71,7 @@ impl Component for Acceleration {
     type Mutability = Mutable;
 }
 
-#[derive(Resource, Deref, DerefMut)]
+#[derive(Resource, Deref, DerefMut, Clone)]
 pub struct ClientRes(pub Client);
 
 impl ClientRes {
@@ -82,5 +84,21 @@ impl ClientRes {
 #[derive(Resource)]
 pub struct SelectedFocusEntity(pub Option<Entity>);
 
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 pub struct Radius(pub f64);
+
+/// Status of the async retrieval of body datas from NASA JPL Horizons
+#[derive(Component)]
+pub struct RetrieveBody(pub Task<CommandQueue>);
+
+/// Resource containing bodies that are not spawned yet (that are not processed yet
+/// in the meaning of not requested data yet from JPL Horizons API).
+#[derive(Resource)]
+pub struct RequestedBodies(pub Vec<i64>);
+
+/// The string the async utils need to search in JPL Horizons
+#[derive(Resource)]
+pub struct SearchBody(pub String);
+
+#[derive(Resource)]
+pub struct SearchBodyResponse(pub Vec<JPLHorizonsBodySearch>);

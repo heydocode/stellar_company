@@ -12,9 +12,9 @@ use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 
 use fetch_space_bodies::{get_body_motion, get_body_properties, search_bodies};
 use shared::{
-    bevy::{ClientRes, Radius},
+    bevy::{ClientRes, Radius, RequestedBodies, SearchBodyResponse},
     prelude::{
-        InterpolatingObjects, JPLHorizonsBodySearch, MainCameraTracker, Mass, ObjectMarker, PhysicsDT, Position, SelectedFocusEntity, TimePaused, UiCameraTracker, UniversalG, Vec3f64, Velocity
+        InterpolatingObjects, JPLHorizonsBodySearch, MainCameraTracker, Mass, ObjectMarker, PhysicsDT, Position, SearchBody, SelectedFocusEntity, TimePaused, UiCameraTracker, UniversalG, Vec3f64, Velocity
     },
 };
 
@@ -26,6 +26,7 @@ impl Plugin for ViewPlugin {
         app.insert_resource(AmbientLight::default());
         app.insert_resource(InterpolatingObjects(true));
         app.insert_resource(SelectedFocusEntity(None));
+        app.insert_resource(SearchBody(String::new()));
         ClientRes::insert_res(app);
         app.add_systems(Startup, setup);
         app.add_systems(Update, (interpolate_objects, draw_velocity_gizmos, update_camera));
@@ -46,7 +47,7 @@ fn setup(mut commands: Commands) {
             // If you want to fully control the camera's focus, set smoothness to 0 so it
             // immediately snaps to that location. If you want the 'follow' to be smoothed,
             // leave this at default or set it to something between 0 and 1.
-            pan_smoothness: 0.1,
+            pan_smoothness: 0.0,
             ..default()
         },
         Camera {
@@ -97,7 +98,7 @@ fn draw_velocity_gizmos(
     interpolating_objects: Res<InterpolatingObjects>,
     mut gizmos: Gizmos,
     motion_q: Query<(&Transform, &Velocity, &Radius), With<ObjectMarker>>, // ← added Radius
-    mut dt: ResMut<PhysicsDT>,
+    // mut dt: ResMut<PhysicsDT>,
     fixed_time: Res<Time<Fixed>>,
     time_paused: Res<TimePaused>,
 ) {
@@ -130,14 +131,9 @@ fn draw_velocity_gizmos(
 
 fn new_bodies_ui(
     mut contexts: EguiContexts<'_, '_>,
-    client: Res<'_, ClientRes>,
-    mut commands: Commands<'_, '_>,
-    mut meshes: ResMut<'_, Assets<Mesh>>,
-    mut materials: ResMut<'_, Assets<StandardMaterial>>,
-    mut body_name: Local<'_, String>,
-    mut searched_bodies: Local<'_, Vec<(i64, String)>>,
-    mut spawn_body: Local<'_, Option<i64>>,
-    mut id_error: Local<'_, Option<String>>,
+    mut body_name: ResMut<SearchBody>,
+    searched_bodies: Res<SearchBodyResponse>,
+    mut requested_bodies: ResMut<RequestedBodies>,
 ) -> Result {
     let mut search_bodies_v = false;
     egui::Window::new("Add a body")
@@ -150,95 +146,42 @@ fn new_bodies_ui(
         ui.label("You can then see the spawned from retrieved physical properties body by going to the \"Camera focus\" window >> Select Body >> Your Body. Note that \"Your Body\" is the body ID you entered to spawn the body.");
         ui.separator();
         ui.label("When spawning a body, there's a huge lag, that's normal: the simulation waits until the NASA databases finish responding, and that will be fixed very soon.");
-        let response = ui.text_edit_singleline(&mut *body_name);
+        let response = ui.text_edit_singleline(&mut body_name.0);
         if response.changed() {
-            if !body_name.chars().all(|c| c.is_ascii_digit()) {
+            if !body_name.0.chars().all(|c| c.is_ascii_digit()) {
                 search_bodies_v = true;
-                *id_error = None;
             }
         }
         let enabled: bool;
-        if body_name.chars().all(|c| c.is_ascii_digit()) {
-            searched_bodies.clear();
+        if body_name.0.chars().all(|c| c.is_ascii_digit()) {
             enabled = true;
         }
         else {
             enabled = false;
         }
         if ui.add_enabled(enabled, egui::Button::new("Spawn body")).clicked() {
-            *spawn_body = body_name.parse::<i64>().ok();
+            if let Some(id) = body_name.0.parse::<i64>().ok() {
+                requested_bodies.0.push(id);
+            }
         };
-        if let Some(error) = &*id_error {
-            ui.label(format!("{}", error));
-        }
-
-        for (index, (id, name)) in searched_bodies.iter().enumerate() {
-            ui.label(format!("Body {}: ID: {}; NAME: \"{}\"", index + 1, id, name));
+        
+        for (index, jpl) in searched_bodies.0.iter().enumerate() {
+            ui.label(format!("Body {}: ID: {}; NAME: \"{}\"", index + 1, jpl.id, jpl.name));
         }
     });
-
-    if search_bodies_v {
-        if let Some(bodies_list) = search_bodies(client.0.clone(), body_name.as_str()) {
-            searched_bodies.clear();
-            for body in bodies_list {
-                searched_bodies.push((body.id, body.name));
-            }
-        }
-    }
-    if let Some(id) = *spawn_body {
-        if let Some((position, velocity)) = get_body_motion(client.0.clone(), id) {
-            if let Some((mass, radius)) = get_body_properties(client.0.clone(), id) {
-                commands.spawn((
-                    Mesh3d(meshes.add(Sphere::new(radius as f32))),
-                    MeshMaterial3d(materials.add(Color::from(GREEN))),
-                    Transform::from_xyz(
-                        position.0.x as f32,
-                        position.0.y as f32,
-                        position.0.z as f32,
-                    ),
-                    position,
-                    mass,
-                    velocity,
-                    Radius(radius),
-                    Name::new(format!("Spawned body, id: \"{}\"", id)),
-                    ObjectMarker,
-                ));
-            } else {
-                *id_error = Some(format!(
-                    "Unable to find body {} physic properties (mass & radius)\nPlease search another Body, if possible, a major one (e.g. Earth, Mars, Sun)",
-                    id
-                ));
-                error!(
-                    "Unable to find body {} physic properties (mass & radius)\nPlease search another Body, if possible, a major one (e.g. Earth, Mars, Sun)",
-                    id
-                );
-            }
-        } else {
-            *id_error = Some(format!(
-                "Unable to find body {} motion parameters (position & velocity)",
-                id
-            ));
-            error!(
-                "Unable to find body {} motion parameters (position & velocity)",
-                id
-            );
-        }
-        *spawn_body = None;
-    }
 
     Ok(())
 }
 
 fn camera_focus_ui(
     mut contexts: EguiContexts,
-    bodies_q: Query<(&Transform, &Name, Entity)>,
+    bodies_q: Query<(&Transform, &Name, Entity), With<ObjectMarker>>,
     mut selected_res: ResMut<SelectedFocusEntity>
 ) -> Result {
     egui::Window::new("Camera focus").scroll(true).show(
         contexts.ctx_mut()?,
         |ui: &mut egui::Ui| {
             let selected = &mut selected_res.0;
-            let before = selected.clone();
             egui::ComboBox::from_label("Select a body by name")
                 .selected_text(format!("{:?}", selected))
                 .show_ui(ui, |ui| {

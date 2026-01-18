@@ -7,54 +7,6 @@ async fn get_text_from_url_async(client: Client, url: String) -> Option<String> 
     client.get(url).send().await.ok()?.text().await.ok()
 }
 
-fn get_text_from_url_sync(client: Client, url: String) -> Option<String> {
-    reqwest::blocking::get(url).ok()?.text().ok()
-}
-
-#[cfg(not(feature = "async"))]
-pub fn get_body_motion(client: Client, id: i64) -> Option<(Position, Velocity)> {
-    let url = format!(
-        "https://ssd.jpl.nasa.gov/api/horizons.api?format=text&COMMAND=%27{}%27&EPHEM_TYPE=VECTORS&CENTER=%27500@399%27&TLIST=%272000-01-01-12-00-00%27&TIME_TYPE=TT&REF_SYSTEM=%27ICRF%27&OUT_UNITS=%27KM-S%27&OBJ_DATA=%27NO%27",
-        id
-    );
-
-    let text = get_text_from_url_sync(client, url)?;
-
-    let mut lines = text.lines();
-
-    while let Some(line) = lines.next() {
-        let line = line.trim();
-        if line.starts_with("$$EOE") {
-            break;
-        }
-        if line.starts_with("$$SOE") {
-            // Skip useless line
-            lines.next();
-            if let Some(should_be_x_line) = lines.next() {
-                // Just to make sure everything is good
-                if should_be_x_line.contains(" X") {
-                    let pos_line = should_be_x_line;
-                    if let Some(next_line) = lines.next() {
-                        // Another sanity check
-                        if next_line.contains("VX") {
-                            let vel_line = next_line;
-                            if let Some(pos) = parse_position(pos_line) {
-                                if let Some(vel) = parse_velocity(vel_line) {
-                                    return Some((pos, vel));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            break;
-        }
-    }
-
-    None
-}
-
-#[cfg(feature = "async")]
 pub async fn get_body_motion(client: Client, id: i64) -> Option<(Position, Velocity)> {
     let url = format!(
         "https://ssd.jpl.nasa.gov/api/horizons.api?format=text&COMMAND=%27{}%27&EPHEM_TYPE=VECTORS&CENTER=%27500@399%27&TLIST=%272000-01-01-12-00-00%27&TIME_TYPE=TT&REF_SYSTEM=%27ICRF%27&OUT_UNITS=%27KM-S%27&OBJ_DATA=%27NO%27",
@@ -97,72 +49,6 @@ pub async fn get_body_motion(client: Client, id: i64) -> Option<(Position, Veloc
     None
 }
 
-#[cfg(not(feature = "async"))]
-pub fn search_bodies(
-    client: Client,
-    input: impl Into<String> + Display,
-) -> Option<Vec<JPLHorizonsBodySearch>> {
-    let mut bodies: Vec<JPLHorizonsBodySearch> = Vec::new();
-    let url = format!(
-        // Some experimentation, I don't believe it changes anything
-        // "https://ssd.jpl.nasa.gov/api/horizons.api?format=text&COMMAND='{}'MAKE_EPHEM='NO'",
-        "https://ssd.jpl.nasa.gov/api/horizons.api?format=text&COMMAND=%27{}%27&MAKE_EPHEM=%27NO%27",
-        input
-    );
-
-    let response_buf = get_text_from_url_sync(client, url)?;
-
-    let mut lines = response_buf.lines();
-
-    let mut relevant_lines = false;
-    while let Some(line) = lines.next() {
-        if line
-            .contains("ID#      Name                               Designation  IAU/aliases/other")
-        {
-            relevant_lines = true;
-            // Skip useless line
-            lines.next();
-            continue;
-        }
-        if line.trim().is_empty() && relevant_lines == true {
-            break;
-        }
-        if !relevant_lines {
-            continue;
-        }
-        if relevant_lines {
-            if let Some(split) = line.split_at_checked(9) {
-                let mut temp_body = JPLHorizonsBodySearch::default();
-                let id = split.0.trim().parse::<i64>().ok()?;
-                {
-                    temp_body.id = id;
-                }
-                if let Some(split) = split.1.split_at_checked(32 + 2 + 3) {
-                    let mut name = split.0.to_string();
-                    if let Some(last_char) = name.chars().last() {
-                        if !last_char.is_whitespace() {
-                            name += "...";
-                        }
-                    }
-                    name = name.trim().to_string();
-                    temp_body.name = name;
-                    if let Some(split) = split.1.split_at_checked(11 + 1) {
-                        let designation = split.0.trim();
-                        temp_body.designation = designation.to_string();
-                        if let Some(split) = split.1.split_at_checked(19 + 2) {
-                            let other = split.0.trim();
-                            temp_body.other = other.to_string();
-                        }
-                    }
-                }
-                bodies.push(temp_body);
-            }
-        }
-    }
-    Some(bodies)
-}
-
-#[cfg(feature = "async")]
 pub async fn search_bodies(
     client: Client,
     input: impl Into<String> + Display,
@@ -227,23 +113,6 @@ pub async fn search_bodies(
     Some(bodies)
 }
 
-#[cfg(not(feature = "async"))]
-pub fn get_body_properties(client: Client, id: i64) -> Option<(Mass, f64)> {
-    let url = format!(
-        "https://ssd.jpl.nasa.gov/api/horizons.api?format=text&COMMAND='{}'&MAKE_EPHEM='NO'&OBJ_DATA='YES'",
-        id
-    );
-
-    let response_buf: String = get_text_from_url_sync(client, url)?;
-
-    if let Some(res) = parse_horizons_physical_single(response_buf.as_str()) {
-        Some(res)
-    } else {
-        None
-    }
-}
-
-#[cfg(feature = "async")]
 /// Returns Mass and radius
 pub async fn get_body_properties(client: Client, id: i64) -> Option<(Mass, f64)> {
     let url = format!(
@@ -424,7 +293,6 @@ fn extract_vec3_from_line(line: &str) -> Option<[&str; 3]> {
 ///
 /// In production, reqwests may even be delayed, to not stress the API,
 /// or the user's internet connection
-#[cfg(feature = "async")]
 #[tokio::test]
 async fn test_network_retrieval() {
     let client = Client::builder().user_agent("curl/7.79.1").build().unwrap();

@@ -5023,6 +5023,7 @@ dependencies = [
  "bevy_panorbit_camera",
  "fetch_space_bodies",
  "shared",
+ "tokio",
 ]
 
 [[package]]
