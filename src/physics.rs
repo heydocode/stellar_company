@@ -1,6 +1,6 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 
-use shared::prelude::{
+use definitions::prelude::{
     Acceleration, Mass, ObjectMarker, PhysicsDT, Position, TimePaused, UniversalG, Vec3f64,
     Velocity,
 };

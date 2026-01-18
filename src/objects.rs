@@ -2,7 +2,7 @@ use bevy::{
     color::palettes::css::{BLUE, RED},
     prelude::*,
 };
-use shared::{
+use definitions::{
     bevy::Radius,
     prelude::{Mass, ObjectMarker, Position, Vec3f64, Velocity},
 };

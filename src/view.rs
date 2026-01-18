@@ -10,9 +10,8 @@ use bevy::{
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext, egui};
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 
-use fetch_space_bodies::{get_body_motion, get_body_properties, search_bodies};
-use shared::{
-    bevy::{ClientRes, Radius, RequestedBodies, SearchBodyResponse},
+use definitions::{
+    bevy::{Radius, RequestedBodies, SearchBodyResponse},
     prelude::{
         InterpolatingObjects, JPLHorizonsBodySearch, MainCameraTracker, Mass, ObjectMarker, PhysicsDT, Position, SearchBody, SelectedFocusEntity, TimePaused, UiCameraTracker, UniversalG, Vec3f64, Velocity
     },
@@ -27,12 +26,11 @@ impl Plugin for ViewPlugin {
         app.insert_resource(InterpolatingObjects(true));
         app.insert_resource(SelectedFocusEntity(None));
         app.insert_resource(SearchBody(String::new()));
-        ClientRes::insert_res(app);
         app.add_systems(Startup, setup);
         app.add_systems(Update, (interpolate_objects, draw_velocity_gizmos, update_camera));
         app.add_systems(
             EguiPrimaryContextPass,
-            (simulation_ui, new_bodies_ui, camera_focus_ui),
+            (simulation_ui, camera_focus_ui),
         );
         app.add_systems(Update, drag_bodies);
     }
@@ -47,7 +45,7 @@ fn setup(mut commands: Commands) {
             // If you want to fully control the camera's focus, set smoothness to 0 so it
             // immediately snaps to that location. If you want the 'follow' to be smoothed,
             // leave this at default or set it to something between 0 and 1.
-            pan_smoothness: 0.0,
+            pan_smoothness: 0.01,
             ..default()
         },
         Camera {
@@ -127,50 +125,6 @@ fn draw_velocity_gizmos(
 
         gizmos.arrow(start, end, ORANGE_RED);
     }
-}
-
-fn new_bodies_ui(
-    mut contexts: EguiContexts<'_, '_>,
-    mut body_name: ResMut<SearchBody>,
-    searched_bodies: Res<SearchBodyResponse>,
-    mut requested_bodies: ResMut<RequestedBodies>,
-) -> Result {
-    let mut search_bodies_v = false;
-    egui::Window::new("Add a body")
-    .scroll(true)
-    .show(contexts.ctx_mut()?, |ui: &mut egui::Ui| {
-        ui.label("Note that you really should have time paused before spawning any body, as its parameters are as of J2000.0, the instant the simulation starts. Doing the contrary won't crash the app or something bad, it will just produce unconsistent/anomaly results");
-        ui.separator();
-        ui.label("Please search the ID of the body you want to import by entering its name. Once you have its ID, put it instead of the name and you'll be able to import it right into the simulation!");
-        ui.separator();
-        ui.label("You can then see the spawned from retrieved physical properties body by going to the \"Camera focus\" window >> Select Body >> Your Body. Note that \"Your Body\" is the body ID you entered to spawn the body.");
-        ui.separator();
-        ui.label("When spawning a body, there's a huge lag, that's normal: the simulation waits until the NASA databases finish responding, and that will be fixed very soon.");
-        let response = ui.text_edit_singleline(&mut body_name.0);
-        if response.changed() {
-            if !body_name.0.chars().all(|c| c.is_ascii_digit()) {
-                search_bodies_v = true;
-            }
-        }
-        let enabled: bool;
-        if body_name.0.chars().all(|c| c.is_ascii_digit()) {
-            enabled = true;
-        }
-        else {
-            enabled = false;
-        }
-        if ui.add_enabled(enabled, egui::Button::new("Spawn body")).clicked() {
-            if let Some(id) = body_name.0.parse::<i64>().ok() {
-                requested_bodies.0.push(id);
-            }
-        };
-        
-        for (index, jpl) in searched_bodies.0.iter().enumerate() {
-            ui.label(format!("Body {}: ID: {}; NAME: \"{}\"", index + 1, jpl.id, jpl.name));
-        }
-    });
-
-    Ok(())
 }
 
 fn camera_focus_ui(
